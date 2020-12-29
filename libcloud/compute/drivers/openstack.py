@@ -33,7 +33,6 @@ from libcloud.utils.py3 import next
 from libcloud.utils.py3 import urlparse
 from libcloud.utils.py3 import parse_qs
 
-
 from libcloud.common.openstack import OpenStackBaseConnection
 from libcloud.common.openstack import OpenStackDriverMixin
 from libcloud.common.openstack import OpenStackException
@@ -3439,6 +3438,11 @@ class OpenStack_2_NodeDriver(OpenStack_1_1_NodeDriver):
         return self._to_volumes(self._paginated_request(
             '/volumes/detail', 'volumes', self.volumev2_connection))
 
+    def ex_get_volume_data(self, volumeId):
+        return self.volumev2_connection.request(
+            '/volumes/%s' % volumeId
+        ).object
+
     def ex_get_volume(self, volumeId):
         """
         Retrieve the StorageVolume with the given ID
@@ -3449,7 +3453,8 @@ class OpenStack_2_NodeDriver(OpenStack_1_1_NodeDriver):
         :return: :class:`StorageVolume`
         """
         return self._to_volume(
-            self.volumev2_connection.request('/volumes/%s' % volumeId).object)
+            self.ex_get_volume_data(volumeId)
+        )
 
     def create_volume(self, size, name, location=None, snapshot=None,
                       ex_volume_type=None, ex_image_ref=None):
@@ -3507,6 +3512,33 @@ class OpenStack_2_NodeDriver(OpenStack_1_1_NodeDriver):
                                                 method='POST',
                                                 data={'volume': volume})
         return self._to_volume(resp.object)
+
+    def ex_update_volume(self, volume, data):
+        """
+        Update a Volume. Can be used to set its name.
+
+        :param volume: Volume to be updated
+        :type volume: :class:`StorageVolume`
+
+        :param data: The volume data to update
+                        (e.g. `{'name': 'new-name'}`)
+        :type data: ``dict``
+
+        :return: The updated volume.
+        :rtype: :class:`StorageVolume`
+        """
+        volume_data = self.ex_get_volume_data(volume.id)
+
+        volume_data['volume'].update(data)
+
+        updated_volume_data = self.volumev2_connection.request(
+            '/volumes/%s' % volume.id, method='PUT', data=volume_data
+        ).object
+
+        return self._to_volume(updated_volume_data)
+
+    def ex_rename_volume(self, volume, new_name):
+        return self.ex_update_volume(volume, {'name': new_name})
 
     def destroy_volume(self, volume):
         """
